@@ -1,9 +1,15 @@
 [project]
 name = "hns"
 version = "0.1.0"
-description = "A speech-to-text CLI that records audio, transcribes it with `faster-whisper`, and copies the resulting text to the clipboard."
+description = "A simple, privacy-focused speech-to-text CLI tool"
 readme = "README.md"
 requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
 dependencies = [
     "click>=8.2.1",
     "faster-whisper>=1.1.1",
@@ -12,8 +18,22 @@ dependencies = [
     "sounddevice>=0.5.2",
 ]
 
+[project.urls]
+Homepage = "https://github.com/primaprashant/hns"
+Issues = "https://github.com/primaprashant/hns/issues"
+
 [project.scripts]
 hns = "hns.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+exclude = [
+  "Makefile",
+  "uv.lock",
+]
 
 [dependency-groups]
 dev = [
