@@ -1,13 +1,13 @@
-# hns - simple privacy-focused speech-to-text CLI tool
+# hns - A simple, privacy-focused speech-to-text CLI tool
 
-A simple privacy-focused speech-to-text CLI tool that records your voice, transcribes it locally using [faster-whisper](https://github.com/SYSTRAN/faster-whisper), and copies the transcription to your clipboard. Perfect for interacting with Claude Code, VS Code, Slack, or anywhere native dictation falls short.
+A simple, privacy-focused speech-to-text CLI tool that records your voice, transcribes it locally using [faster-whisper](https://github.com/SYSTRAN/faster-whisper), and copies the transcription to your clipboard. Perfect for interacting with Claude Code, VS Code, Slack, or any application where native dictation falls short.
 
 ## Highlights
 
 - **100% Local & Private**: Audio is processed entirely on your local machine. No data leaves your device
-- **Works Offline**: After initial model download, no internet required
+- **Works Offline**: After the initial model download, no internet connection is required
 - **Instant Clipboard**: Transcribed text is automatically copied to your clipboard for immediate pasting
-- **Multi-Language Support**: Transcribe in any language Whisper supports
+- **Multi-Language Support**: Transcribe in any language supported by Whisper
 - **Configurable**: Choose models and languages via environment variables
 - **Focused** - Does one thing well: speech → clipboard
 - **Open Source** - MIT licensed, fully transparent
@@ -26,20 +26,20 @@ A simple privacy-focused speech-to-text CLI tool that records your voice, transc
 
 ## Installation
 
-Install (recommended via [uv](https://github.com/astral-sh/uv)):
-```
+Install via [uv](https://github.com/astral-sh/uv) (recommended):
+```sh
 uv tool install hns
 ```
-or
-```
+or `pipx`:
+```sh
 pipx install hns
 ```
-or
-```
+or `pip`:
+```sh
 pip install --user hns
-   ```
+```
 
-The first time you run `hns`, it will download the default Whisper model (`base`). This may take a few moments and requires an internet connection. Subsequent runs can be fully offline.
+The first time you run `hns`, it will download the default Whisper model (`base`). This requires an internet connection and may take a few moments. Subsequent runs can be fully offline.
 
 ## Usage
 
@@ -49,8 +49,8 @@ The first time you run `hns`, it will download the default Whisper model (`base`
     ```sh
     hns
     ```
-2.  The tool will show `🎤 Recording...`. Speak into your microphone.
-3.  Press `Enter` when you are finished.
+2.  The tool will display `🎤 Recording...`. Speak into your microphone.
+3.  Press `Enter` when you have finished.
 4.  The transcribed text is automatically copied to your clipboard and printed to the console.
 
 ### Configuration
@@ -64,7 +64,7 @@ hns --list-models
 
 #### Setting the Model
 
-You can select a model by setting the `HNS_WHISPER_MODEL` environment variable. The default is `base`. For higher accuracy, use a larger model like `medium` or `large-v3`.
+Select a model by setting the `HNS_WHISPER_MODEL` environment variable. The default is `base`. For higher accuracy, use a larger model like `medium` or `large-v3`.
 
 ```sh
 # Use the 'small' model for the current session
@@ -72,14 +72,14 @@ export HNS_WHISPER_MODEL="small"
 hns
 ```
 
-Add `export HNS_WHISPER_MODEL="<model_name>"` to your shell profile (`.zshrc`, `.bash_profile`, etc.) to make the change permanent.
+To make the change permanent, add `export HNS_WHISPER_MODEL="<model_name>"` to your shell profile (`.zshrc`, `.bash_profile`, etc.).
 
 #### Setting the Language
 
-By default, Whisper auto-detects the language. To force a specific language, use the `HNS_LANG` environment variable.
+By default, Whisper auto-detects the language. To force a specific language, set the `HNS_LANG` environment variable.
 
 ```sh
-# Using an environment variable for Japanese
+# Use an environment variable for Japanese
 export HNS_LANG="ja"
 hns
 ```
