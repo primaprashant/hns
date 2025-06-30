@@ -2,7 +2,7 @@
 
 A simple, privacy-focused speech-to-text CLI tool that records your voice, transcribes it locally using [faster-whisper](https://github.com/SYSTRAN/faster-whisper), and copies the transcription to your clipboard. Perfect for interacting with Claude Code, VS Code, Slack, or any application where native dictation falls short.
 
-![demo](https://cdn.anandprashant.com/hns/demo.mov)
+[![Watch Demo](https://cdn.anandprashant.com/hns/thumbnail.png)](https://cdn.anandprashant.com/hns/demo.mp4)
 
 ## Highlights
 
