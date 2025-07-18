@@ -32,7 +32,7 @@ class AudioRecorder:
 
         try:
             with stream:
-                click.echo("🎤 Recording... Press Enter to stop")
+                click.echo("🎤 Recording... Press Enter to stop", nl=False)
                 input()
         except KeyboardInterrupt:
             click.echo("\n⏹️  Recording cancelled")
@@ -154,6 +154,8 @@ def main(sample_rate: int, channels: int, list_models: bool, language: Optional[
     try:
         recorder = AudioRecorder(sample_rate, channels)
         audio_array = recorder.record()
+
+        click.echo("🔄 Transcribing audio...")
 
         transcriber = WhisperTranscriber(language=language)
         transcription = transcriber.transcribe(audio_array)
