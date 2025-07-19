@@ -1,5 +1,6 @@
 import os
 import sys
+import threading
 import time
 import wave
 from pathlib import Path
@@ -11,9 +12,24 @@ import pyperclip
 import sounddevice as sd
 from faster_whisper import WhisperModel
 from rich.console import Console
+from rich.live import Live
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+from rich.text import Text
 
 console = Console()
+
+
+def format_duration(seconds: float) -> str:
+    """Format duration in seconds to HH:MM:SS or MM:SS format."""
+    total_seconds = int(seconds)
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    secs = total_seconds % 60
+    
+    if hours > 0:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    else:
+        return f"{minutes:02d}:{secs:02d}"
 
 
 class AudioRecorder:
@@ -44,15 +60,44 @@ class AudioRecorder:
             self._close_wave_file()
             raise RuntimeError(f"Failed to initialize audio stream: {e}")
 
+        # Setup timer for live recording display
+        start_time = time.time()
+        recording_stopped = threading.Event()
+
+
         try:
             with stream:
-                console.print("🎤 [bold blue]Recording... Press Enter to stop[/bold blue]", end="")
+                def update_timer():
+                    """Update the display with elapsed time."""
+                    while not recording_stopped.is_set():
+                        elapsed = time.time() - start_time
+                        time_str = format_duration(elapsed)
+                        # Overwrite the same line
+                        console.print(f"🎤 [bold blue]Recording {time_str}... Press Enter to stop[/bold blue]", end="\r")
+                        time.sleep(1)
+
+                # Start timer thread
+                timer_thread = threading.Thread(target=update_timer)
+                timer_thread.daemon = True
+                timer_thread.start()
+
+                # Wait for user input
                 input()
+                
+                # Stop timer and wait for thread to finish
+                recording_stopped.set()
+                timer_thread.join(timeout=2)  # Wait up to 2 seconds for thread to finish
+                
+                # Clear the recording line completely
+                console.print(" " * 50, end="\r")  # Clear line with spaces
+
         except KeyboardInterrupt:
+            recording_stopped.set()
             console.print("\n⏹️ [bold yellow]Recording cancelled[/bold yellow]")
             self._close_wave_file()
             sys.exit(0)
         finally:
+            recording_stopped.set()
             self._close_wave_file()
 
         if self.recording_frames == 0:
@@ -164,7 +209,7 @@ class WhisperTranscriber:
 
             if show_progress:
                 if audio_duration:
-                    duration_str = f"{audio_duration:.1f} seconds"
+                    duration_str = format_duration(audio_duration)
                     console.print(f"🔄 [bold blue]Transcribing {duration_str} of audio...[/bold blue]")
                 else:
                     console.print("🔄 [bold blue]Transcribing audio...[/bold blue]")
