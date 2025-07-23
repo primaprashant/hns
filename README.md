@@ -4,7 +4,7 @@ A simple, privacy-focused speech-to-text CLI tool that records your voice, trans
 
 Click the image below to see the demo ⬇️ (warning: demo has sound)
 
-[![Watch Demo](https://cdn.anandprashant.com/hns/thumbnail.png)](https://cdn.anandprashant.com/hns/demo.mp4)
+[![Watch Demo](https://cdn.anandprashant.com/hns/thumbnail-1.0.1.png)](https://cdn.anandprashant.com/hns/demo-1.0.1.mp4)
 
 ## Highlights
 
