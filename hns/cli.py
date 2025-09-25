@@ -12,9 +12,7 @@ import pyperclip
 import sounddevice as sd
 from faster_whisper import WhisperModel
 from rich.console import Console
-from rich.live import Live
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
-from rich.text import Text
 
 console = Console()
 
@@ -25,7 +23,7 @@ def format_duration(seconds: float) -> str:
     hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
     secs = total_seconds % 60
-    
+
     if hours > 0:
         return f"{hours}:{minutes:02d}:{secs:02d}"
     else:
@@ -64,16 +62,18 @@ class AudioRecorder:
         start_time = time.time()
         recording_stopped = threading.Event()
 
-
         try:
             with stream:
+
                 def update_timer():
                     """Update the display with elapsed time."""
                     while not recording_stopped.is_set():
                         elapsed = time.time() - start_time
                         time_str = format_duration(elapsed)
                         # Overwrite the same line
-                        console.print(f"🎤 [bold blue]Recording {time_str}... Press Enter to stop[/bold blue]", end="\r")
+                        console.print(
+                            f"🎤 [bold blue]Recording {time_str}... Press Enter to stop[/bold blue]", end="\r"
+                        )
                         time.sleep(1)
 
                 # Start timer thread
@@ -83,11 +83,11 @@ class AudioRecorder:
 
                 # Wait for user input
                 input()
-                
+
                 # Stop timer and wait for thread to finish
                 recording_stopped.set()
                 timer_thread.join(timeout=2)  # Wait up to 2 seconds for thread to finish
-                
+
                 # Clear the recording line completely
                 console.print(" " * 50, end="\r")  # Clear line with spaces
 
