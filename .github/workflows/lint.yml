@@ -24,7 +24,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        uv sync --dev
+        uv sync --dev --frozen
 
     - name: Run linting and formatting checks
       run: |
