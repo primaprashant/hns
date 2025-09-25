@@ -1,0 +1,39 @@
+name: Lint and Format Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.10'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+
+    - name: Install dependencies
+      run: |
+        uv sync --dev --frozen
+
+    - name: Run linting and formatting checks
+      run: |
+        make format-and-lint
+
+    - name: Check for uncommitted changes
+      run: |
+        if [[ -n $(git diff --exit-code) ]]; then
+          echo "::error::Linting and formatting checks failed. Please run 'make format-and-lint' locally and commit the changes."
+          git diff
+          exit 1
+        fi
