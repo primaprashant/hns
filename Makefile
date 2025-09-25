@@ -14,6 +14,16 @@ format-and-lint:
 	uv run --no-sync --project . ruff format
 	uv run --no-sync --project . ruff check --fix
 
+bump-patch:
+	uv version --bump patch
+	uv sync
+	@echo "Patch version bumped and recreated lock file."
+
+bump-minor:
+	uv version --bump minor
+	uv sync
+	@echo "Minor version bumped and recreated lock file."
+
 publish-test:
 	uv build
 	@if [ -z "$(PYPI_TEST_TOKEN)" ]; then echo "Error: TEST_PYPI_TOKEN is not set"; exit 1; fi
