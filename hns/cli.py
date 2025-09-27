@@ -193,9 +193,7 @@ class WhisperTranscriber:
         except Exception as e:
             raise RuntimeError(f"Failed to load model: {e}")
 
-    def transcribe(
-        self, audio_source: Union[Path, str], show_progress: bool = True
-    ) -> str:
+    def transcribe(self, audio_source: Union[Path, str], show_progress: bool = True) -> str:
         transcribe_kwargs = {
             "beam_size": 5,
             "vad_filter": True,
