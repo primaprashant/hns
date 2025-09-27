@@ -193,9 +193,7 @@ class WhisperTranscriber:
         except Exception as e:
             raise RuntimeError(f"Failed to load model: {e}")
 
-    def transcribe(
-        self, audio_source: Union[Path, str], stream_output: bool = False, show_progress: bool = True
-    ) -> str:
+    def transcribe(self, audio_source: Union[Path, str], show_progress: bool = True) -> str:
         transcribe_kwargs = {
             "beam_size": 5,
             "vad_filter": True,
@@ -232,8 +230,6 @@ class WhisperTranscriber:
                         for segment in segments:
                             text = segment.text.strip()
                             if text:
-                                if stream_output:
-                                    click.echo(text, nl=False)
                                 transcription_parts.append(text)
                         progress_queue.put(("result", transcription_parts))
                     except Exception as e:
@@ -281,12 +277,7 @@ class WhisperTranscriber:
                 for segment in segments:
                     text = segment.text.strip()
                     if text:
-                        if stream_output:
-                            click.echo(text, nl=False)
                         transcription_parts.append(text)
-
-            if stream_output and transcription_parts:
-                click.echo()  # New line after streaming
 
             full_transcription = " ".join(transcription_parts)
             if not full_transcription:
