@@ -14,7 +14,8 @@ from faster_whisper import WhisperModel
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
-console = Console()
+console = Console(stderr=True)
+stdout_console = Console()
 
 
 def format_duration(seconds: float) -> str:
@@ -250,6 +251,7 @@ class WhisperTranscriber:
                     TextColumn("[bold blue]Processing audio..."),
                     TimeElapsedColumn(),
                     transient=False,
+                    console=console,
                 ) as progress:
                     task = progress.add_task("Analyzing speech patterns", total=None)
 
@@ -311,7 +313,7 @@ def copy_to_clipboard(text: str, elapsed_time: Optional[float] = None):
         console.print(f"✅ [bold green]Transcribed and copied to clipboard in {elapsed_time:.1f}s![/bold green]")
     else:
         console.print("✅ [bold green]Transcribed and copied to clipboard![/bold green]")
-    console.print(f"\n{text}")
+    stdout_console.print(text)
 
 
 @click.command()
