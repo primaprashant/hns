@@ -10,7 +10,6 @@ import click
 import numpy as np
 import pyperclip
 import sounddevice as sd
-from faster_whisper import WhisperModel
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
@@ -187,7 +186,9 @@ class WhisperTranscriber:
 
         return model
 
-    def _load_model(self) -> WhisperModel:
+    def _load_model(self):
+        from faster_whisper import WhisperModel
+
         try:
             return WhisperModel(self.model_name, device="cpu", compute_type="int8")
         except Exception as e:
