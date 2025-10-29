@@ -312,6 +312,7 @@ dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.3.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pyperclip" },
+    { name = "requests" },
     { name = "rich" },
     { name = "sounddevice" },
 ]
@@ -327,6 +328,7 @@ requires-dist = [
     { name = "faster-whisper", specifier = ">=1.1.1" },
     { name = "numpy", specifier = ">=2.2.6" },
     { name = "pyperclip", specifier = ">=1.9.0" },
+    { name = "requests", specifier = ">=2.32.4" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "sounddevice", specifier = ">=0.5.2" },
 ]
