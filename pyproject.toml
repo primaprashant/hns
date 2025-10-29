@@ -1,6 +1,6 @@
 [project]
 name = "hns"
-version = "1.0.7"
+version = "1.0.8"
 description = "A simple, privacy-focused speech-to-text CLI tool"
 readme = "README.md"
 requires-python = ">=3.10"
