@@ -1,6 +1,6 @@
 [project]
 name = "hns"
-version = "1.0.7"
+version = "1.0.8"
 description = "A simple, privacy-focused speech-to-text CLI tool"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -15,6 +15,7 @@ dependencies = [
     "faster-whisper>=1.1.1",
     "numpy>=2.2.6",
     "pyperclip>=1.9.0",
+    "requests>=2.32.4",
     "rich>=13.0.0",
     "sounddevice>=0.5.2",
 ]
