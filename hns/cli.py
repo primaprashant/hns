@@ -11,7 +11,6 @@ import numpy as np
 import pyperclip
 import sounddevice as sd
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 console = Console(stderr=True)
 stdout_console = Console()
@@ -72,7 +71,7 @@ class AudioRecorder:
                         time_str = format_duration(elapsed)
                         # Overwrite the same line
                         console.print(
-                            f"🎤 [bold blue]Recording {time_str}... Press Enter to stop[/bold blue]", end="\r"
+                            f"🎤 [bold blue]Recording ...... {time_str} Press Enter to stop[/bold blue]", end="\r"
                         )
                         time.sleep(1)
 
@@ -205,15 +204,6 @@ class WhisperTranscriber:
             transcribe_kwargs["language"] = self.language
 
         try:
-            audio_duration = self._get_audio_duration(audio_source) if show_progress else None
-
-            if show_progress:
-                if audio_duration:
-                    duration_str = format_duration(audio_duration)
-                    console.print(f"🔄 [bold blue]Transcribing {duration_str} of audio...[/bold blue]")
-                else:
-                    console.print("🔄 [bold blue]Transcribing audio...[/bold blue]")
-
             start_time = time.time()
 
             if show_progress:
@@ -243,30 +233,15 @@ class WhisperTranscriber:
                 worker_thread.daemon = True
                 worker_thread.start()
 
-                with Progress(
-                    SpinnerColumn(),
-                    TextColumn("[bold blue]Processing audio..."),
-                    TimeElapsedColumn(),
-                    transient=False,
-                    console=console,
-                ) as progress:
-                    task = progress.add_task("Analyzing speech patterns", total=None)
+                # Simple progress display with elapsed timer
+                while not transcription_complete.is_set():
+                    elapsed = time.time() - start_time
+                    time_str = format_duration(elapsed)
+                    console.print(f"🔄 [bold blue]Transcribing ... {time_str}[/bold blue]", end="\r")
+                    time.sleep(1)
 
-                    while not transcription_complete.is_set():
-                        elapsed = time.time() - start_time
-                        if audio_duration and elapsed > 0:
-                            # Rough estimation: transcription usually takes 10-30% of audio duration
-                            estimated_progress = min(95, (elapsed / (audio_duration * 0.2)) * 100)
-                            progress.update(
-                                task,
-                                description=f"[bold blue]Processing (~{estimated_progress:.0f}% estimated)[/bold blue]",
-                            )
-                        else:
-                            progress.update(
-                                task, description=f"[bold blue]Processing ({elapsed:.1f}s elapsed)[/bold blue]"
-                            )
-
-                        time.sleep(0.1)  # Update every 100ms
+                # Print a new line
+                console.print("")
 
                 result_type, result_data = progress_queue.get()
                 if result_type == "error":
@@ -299,13 +274,9 @@ class WhisperTranscriber:
         console.print("  [dim]export HNS_LANG=<language-code>  # e.g., en, es, fr[/dim]")
 
 
-def copy_to_clipboard(text: str, elapsed_time: Optional[float] = None):
+def copy_to_clipboard(text: str):
     pyperclip.copy(text)
-    if elapsed_time:
-        console.print(f"✅ [bold green]Transcribed and copied to clipboard in {elapsed_time:.1f}s![/bold green]")
-    else:
-        console.print("✅ [bold green]Transcribed and copied to clipboard![/bold green]")
-    stdout_console.print(text)
+    console.print("✅ [bold green]Copied to clipboard![/bold green]")
 
 
 @click.command()
@@ -334,9 +305,14 @@ def main(sample_rate: int, channels: int, list_models: bool, language: Optional[
             recorder = AudioRecorder(sample_rate, channels)
             audio_file_path = recorder.record()
         transcriber = WhisperTranscriber(language=language)
-        transcription, elapsed_time = transcriber.transcribe(audio_file_path, show_progress=True)
+        transcription, _ = transcriber.transcribe(audio_file_path, show_progress=True)
 
-        copy_to_clipboard(transcription, elapsed_time)
+        try:
+            copy_to_clipboard(transcription)
+        except Exception as e:
+            console.print(f"⚠️ [bold yellow]Failed to copy to clipboard: {e}[/bold yellow]")
+
+        stdout_console.print(transcription)
 
     except (RuntimeError, ValueError) as e:
         console.print(f"❌ [bold red]{e}[/bold red]")
