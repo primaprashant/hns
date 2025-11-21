@@ -68,8 +68,6 @@ With `hns`, you can:
 
 ## Demo
 
-<p align="center" width="100%">
 <video controls poster="img/thumbnail.png">
   <source src="https://github.com/primaprashant/hns/raw/ec1b1f518042a12b2c346cc623208ac50b891e51/img/demo.mp4" type="video/mp4">
 </video>
-</p>
