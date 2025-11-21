@@ -1,5 +1,5 @@
-<p align="center" width="60%">
-  <a href=""><img src="img/hns-github-card.png" alt="hns"></a>
+<p align="center">
+  <a href=""><img src="img/hns-github-card.png" alt="hns" width="60%"></a>
 </p>
 <p align="center">
     <em>Speech-to-text CLI. 100% local. Built for developers.</em>
