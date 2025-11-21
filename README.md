@@ -67,3 +67,7 @@ With `hns`, you can:
 ![use-cases-command-examples](img/hero-command-examples-dark.png)
 
 ## Demo
+
+Watch with sound on!
+
+https://github.com/user-attachments/assets/2aa3752e-bd16-4536-81bd-0679c3be3616
