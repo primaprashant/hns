@@ -26,9 +26,9 @@ hns is a speech-to-text CLI tool to transcribe your voice from your microphone d
 `hns` transcribes your voice 100% locally using [faster-whisper](https://github.com/SYSTRAN/faster-whisper). The whisper model is downloaded automatically on first run and after that, `hns` can be used completely offline. After transcription, the text is displayed in the terminal (written to stdout) as well as automatically copied to your clipboard, ready to be pasted anywhere with `Ctrl+V` or `Cmd+V`.
 
 With `hns`, you can:
-- [Drive AI coding agents like Claude Code, Codex CLI, and Cursor CLI with your voice](https://hns-cli.dev/docs/drive-coding-agents)
-- [Dictate and get polished text for emails, Slack messages, and documents](https://hns-cli.dev/docs/voice-to-polished-text)
-- [Speak freely in a stream-of-consciousness style and get polished, coherent journal entry or note](https://hns-cli.dev/docs/effortless-daily-journaling)
+- [Drive AI coding agents like Claude Code, Codex CLI, and Cursor CLI with your voice](https://hns-cli.dev/docs/drive-coding-agents/)
+- [Dictate and get polished text for emails, Slack messages, and documents](https://hns-cli.dev/docs/voice-to-polished-text/)
+- [Speak freely in a stream-of-consciousness style and get polished, coherent journal entry or note](https://hns-cli.dev/docs/effortless-daily-journaling/)
 
 ...and much more! Just integrate `hns` with your favorite CLI tools.
 
@@ -52,15 +52,15 @@ With `hns`, you can:
 
 - **[Overview](https://hns-cli.dev/docs/)**
 - **Get Started**
-  - [Quick Start](https://hns-cli.dev/docs/quick-start): Get `hns` up and running in less than 30 seconds.
-  - [Installation](https://hns-cli.dev/docs/installation): Different ways to install `hns`, configure it, and upgrade to the latest version.
-  - [Configuration](https://hns-cli.dev/docs/configuration): Configure `hns` to match your hardware and transcription needs. Set up Whisper models and language preferences for optimal performance.
-  - [CLI Reference](https://hns-cli.dev/docs/cli-reference): Detailed reference for all available command-line options for `hns`.
+  - [Quick Start](https://hns-cli.dev/docs/quick-start/): Get `hns` up and running in less than 30 seconds.
+  - [Installation](https://hns-cli.dev/docs/installation/): Different ways to install `hns`, configure it, and upgrade to the latest version.
+  - [Configuration](https://hns-cli.dev/docs/configuration/): Configure `hns` to match your hardware and transcription needs. Set up Whisper models and language preferences for optimal performance.
+  - [CLI Reference](https://hns-cli.dev/docs/cli-reference/): Detailed reference for all available command-line options for `hns`.
 - **Use Cases**
-  - [Overview](https://hns-cli.dev/docs/use-cases): Unlock powerful workflows by integrating `hns` with various CLI tools.
-  - [Drive AI Coding Agents With Your Voice](https://hns-cli.dev/docs/drive-coding-agents): Provide detailed, context-rich prompts to coding agents like Claude Code, Codex CLI, and Cursor CLI with your voice for faster development cycles.
-  - [Turn Your Voice Into Polished Text](https://hns-cli.dev/docs/voice-to-polished-text): Integrate `hns` with LLMs to transforms your raw dictation into polished text for emails, Slack messages, and documents, streamlining your daily communication.
-  - [Effortless Daily Journaling With Your Voice](https://hns-cli.dev/docs/effortless-daily-journaling): Speak freely in a stream-of-consciousness style and get polished, coherent journal entries or notes by integrating `hns` with LLMs.
+  - [Overview](https://hns-cli.dev/docs/use-cases/): Unlock powerful workflows by integrating `hns` with various CLI tools.
+  - [Drive AI Coding Agents With Your Voice](https://hns-cli.dev/docs/drive-coding-agents/): Provide detailed, context-rich prompts to coding agents like Claude Code, Codex CLI, and Cursor CLI with your voice for faster development cycles.
+  - [Turn Your Voice Into Polished Text](https://hns-cli.dev/docs/voice-to-polished-text/): Integrate `hns` with LLMs to transforms your raw dictation into polished text for emails, Slack messages, and documents, streamlining your daily communication.
+  - [Effortless Daily Journaling With Your Voice](https://hns-cli.dev/docs/effortless-daily-journaling/): Speak freely in a stream-of-consciousness style and get polished, coherent journal entries or notes by integrating `hns` with LLMs.
 
 ## Usage
 
