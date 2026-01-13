@@ -1,16 +1,17 @@
-import os
 import sys
 import threading
 import time
 import wave
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 
 import click
 import numpy as np
 import pyperclip
 import sounddevice as sd
 from rich.console import Console
+
+from .transcribers import create_transcriber, list_all_models
 
 console = Console(stderr=True)
 stdout_console = Console()
@@ -136,144 +137,6 @@ class AudioRecorder:
             self.wave_file = None
 
 
-class WhisperTranscriber:
-    VALID_MODELS = [
-        "tiny.en",
-        "tiny",
-        "base.en",
-        "base",
-        "small.en",
-        "small",
-        "medium.en",
-        "medium",
-        "large-v1",
-        "large-v2",
-        "large-v3",
-        "large",
-        "distil-large-v2",
-        "distil-medium.en",
-        "distil-small.en",
-        "distil-large-v3",
-        "distil-large-v3.5",
-        "large-v3-turbo",
-        "turbo",
-    ]
-
-    def __init__(self, model_name: Optional[str] = None, language: Optional[str] = None):
-        self.model_name = self._get_model_name(model_name)
-        self.language = language or os.environ.get("HNS_LANG")
-        self.model = self._load_model()
-
-    def _get_audio_duration(self, audio_file_path: Union[Path, str]) -> Optional[float]:
-        """Get duration of audio file in seconds."""
-        try:
-            with wave.open(str(audio_file_path), "rb") as audio_file:
-                frames = audio_file.getnframes()
-                sample_rate = audio_file.getframerate()
-                duration = frames / float(sample_rate)
-                return duration
-        except Exception:
-            return None
-
-    def _get_model_name(self, model_name: Optional[str]) -> str:
-        model = model_name or os.environ.get("HNS_WHISPER_MODEL", "base")
-
-        if model not in self.VALID_MODELS:
-            console.print(f"⚠️ [bold yellow]Invalid model '{model}', using 'base' instead[/bold yellow]")
-            console.print(f"    [dim]Available models: {', '.join(self.VALID_MODELS)}[/dim]")
-            return "base"
-
-        return model
-
-    def _load_model(self):
-        from faster_whisper import WhisperModel
-
-        try:
-            return WhisperModel(self.model_name, device="cpu", compute_type="int8")
-        except Exception as e:
-            raise RuntimeError(f"Failed to load model: {e}")
-
-    def transcribe(self, audio_source: Union[Path, str], show_progress: bool = True) -> str:
-        transcribe_kwargs = {
-            "beam_size": 5,
-            "vad_filter": True,
-            "vad_parameters": {"min_silence_duration_ms": 500, "speech_pad_ms": 400, "threshold": 0.5},
-        }
-
-        if self.language:
-            transcribe_kwargs["language"] = self.language
-
-        try:
-            start_time = time.time()
-
-            if show_progress:
-                import queue
-                import threading
-
-                progress_queue = queue.Queue()
-                transcription_complete = threading.Event()
-
-                def transcribe_worker():
-                    """Worker function to perform transcription in background."""
-                    try:
-                        segments, _ = self.model.transcribe(str(audio_source), **transcribe_kwargs)
-                        transcription_parts = []
-                        for segment in segments:
-                            text = segment.text.strip()
-                            if text:
-                                transcription_parts.append(text)
-                        progress_queue.put(("result", transcription_parts))
-                    except Exception as e:
-                        progress_queue.put(("error", e))
-                    finally:
-                        transcription_complete.set()
-
-                # Start transcription in background
-                worker_thread = threading.Thread(target=transcribe_worker)
-                worker_thread.daemon = True
-                worker_thread.start()
-
-                # Simple progress display with elapsed timer
-                while not transcription_complete.is_set():
-                    elapsed = time.time() - start_time
-                    time_str = format_duration(elapsed)
-                    console.print(f"🔄 [bold blue]Transcribing ... {time_str}[/bold blue]", end="\r")
-                    time.sleep(1)
-
-                # Print a new line
-                console.print("")
-
-                result_type, result_data = progress_queue.get()
-                if result_type == "error":
-                    raise result_data
-                transcription_parts = result_data
-            else:
-                segments, _ = self.model.transcribe(str(audio_source), **transcribe_kwargs)
-                transcription_parts = []
-                for segment in segments:
-                    text = segment.text.strip()
-                    if text:
-                        transcription_parts.append(text)
-
-            full_transcription = " ".join(transcription_parts)
-            if not full_transcription:
-                raise ValueError("No speech detected in audio")
-
-            elapsed_total = time.time() - start_time
-            return full_transcription, elapsed_total if show_progress else None
-        except Exception as e:
-            raise RuntimeError(f"Transcription failed: {e}")
-
-    @classmethod
-    def list_models(cls):
-        console.print("ℹ️ [bold cyan]Available Whisper models:[/bold cyan]")
-        for model in cls.VALID_MODELS:
-            console.print(f"  • [dim]{model}[/dim]")
-        console.print("\nℹ️ [bold cyan]Environment variables:[/bold cyan]")
-        console.print("  [dim]export HNS_WHISPER_MODEL=<model-name>[/dim]")
-        console.print("  [dim]export HNS_LANG=<language-code>  # e.g., en, es, fr[/dim]")
-
-
 def copy_to_clipboard(text: str):
     pyperclip.copy(text)
     console.print("✅ [bold green]Copied to clipboard![/bold green]")
@@ -289,7 +152,7 @@ def main(sample_rate: int, channels: int, list_models: bool, language: Optional[
     """Record audio from microphone, transcribe it, and copy to clipboard."""
 
     if list_models:
-        WhisperTranscriber.list_models()
+        list_all_models()
         return
 
     try:
@@ -304,7 +167,7 @@ def main(sample_rate: int, channels: int, list_models: bool, language: Optional[
         else:
             recorder = AudioRecorder(sample_rate, channels)
             audio_file_path = recorder.record()
-        transcriber = WhisperTranscriber(language=language)
+        transcriber = create_transcriber(language=language)
         transcription, _ = transcriber.transcribe(audio_file_path, show_progress=True)
 
         try:
