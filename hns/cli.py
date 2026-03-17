@@ -186,10 +186,14 @@ class WhisperTranscriber:
         return model
 
     def _load_model(self):
+        import ctranslate2
         from faster_whisper import WhisperModel
 
         try:
-            return WhisperModel(self.model_name, device="cpu", compute_type="int8")
+            if ctranslate2.get_cuda_device_count() > 0:
+                return WhisperModel(self.model_name, device="cuda", compute_type="float16")
+            else:
+                return WhisperModel(self.model_name, device="cpu", compute_type="int8")
         except Exception as e:
             raise RuntimeError(f"Failed to load model: {e}")
 
