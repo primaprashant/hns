@@ -9,7 +9,6 @@ from typing import Optional, Union
 import click
 import numpy as np
 import pyperclip
-import sounddevice as sd
 from rich.console import Console
 
 console = Console(stderr=True)
@@ -50,6 +49,8 @@ class AudioRecorder:
         self._prepare_wave_file()
 
         try:
+            import sounddevice as sd
+
             stream = sd.InputStream(
                 samplerate=self.sample_rate, channels=self.channels, callback=self._audio_callback, dtype=np.float32
             )
@@ -106,6 +107,8 @@ class AudioRecorder:
 
     def _validate_audio_device(self):
         try:
+            import sounddevice as sd
+
             default_input = sd.query_devices(kind="input")
             if default_input is None:
                 raise RuntimeError("No audio input device found")
@@ -113,7 +116,10 @@ class AudioRecorder:
             raise RuntimeError(f"Failed to access audio devices: {e}")
 
     def _get_audio_file_path(self) -> Path:
-        if sys.platform == "win32":
+        cache_dir_override = os.environ.get("HNS_CACHE_DIR")
+        if cache_dir_override:
+            cache_dir = Path(cache_dir_override).expanduser()
+        elif sys.platform == "win32":
             cache_dir = Path.home() / "AppData" / "Local" / "hns" / "Cache"
         elif sys.platform == "darwin":
             cache_dir = Path.home() / "Library" / "Caches" / "hns"
@@ -272,6 +278,7 @@ class WhisperTranscriber:
         console.print("\nℹ️ [bold cyan]Environment variables:[/bold cyan]")
         console.print("  [dim]export HNS_WHISPER_MODEL=<model-name>[/dim]")
         console.print("  [dim]export HNS_LANG=<language-code>  # e.g., en, es, fr[/dim]")
+        console.print("  [dim]export HNS_CACHE_DIR=<cache-dir>  # override last_recording.wav location[/dim]")
 
 
 def copy_to_clipboard(text: str):

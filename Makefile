@@ -1,4 +1,4 @@
-.PHONY: run test-help list-models test-tiny
+.PHONY: run test-help list-models test-transcription format-and-lint bump-patch bump-minor publish-test publish
 
 run:
 	@HNS_WHISPER_MODEL=small uv run --no-sync --project . python -m hns.cli
@@ -8,6 +8,9 @@ test-help:
 
 list-models:
 	@uv run --no-sync --project . python -m hns.cli --list-models
+
+test-transcription:
+	@uv run --no-sync --project . python tests/check_transcription_fixture.py
 
 format-and-lint:
 	uv run --no-sync --project . ruff check --select I --fix
