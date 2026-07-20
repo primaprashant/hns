@@ -1,6 +1,5 @@
 import os
 import sys
-import threading
 import time
 import wave
 from pathlib import Path
@@ -9,6 +8,8 @@ import click
 import numpy as np
 import pyperclip
 from rich.console import Console
+from rich.live import Live
+from rich.text import Text
 
 console = Console(stderr=True)
 stdout_console = Console()
@@ -25,6 +26,19 @@ def format_duration(seconds: float) -> str:
         return f"{hours}:{minutes:02d}:{secs:02d}"
     else:
         return f"{minutes:02d}:{secs:02d}"
+
+
+class TimerLine:
+    def __init__(self, template: str):
+        self.template = template
+        self.start_time = time.time()
+
+    @property
+    def elapsed(self) -> float:
+        return time.time() - self.start_time
+
+    def __rich__(self) -> Text:
+        return Text.from_markup(self.template.format(elapsed=format_duration(self.elapsed)))
 
 
 def get_audio_file_path() -> Path:
@@ -72,46 +86,15 @@ class AudioRecorder:
             self._close_wave_file()
             raise RuntimeError(f"Failed to initialize audio stream: {e}") from e
 
-        # Setup timer for live recording display
-        start_time = time.time()
-        recording_stopped = threading.Event()
-
+        timer = TimerLine("🎤 [bold blue]Recording ...... {elapsed} Press Enter to stop[/bold blue]")
         try:
-            with stream:
-
-                def update_timer():
-                    """Update the display with elapsed time."""
-                    while not recording_stopped.is_set():
-                        elapsed = time.time() - start_time
-                        time_str = format_duration(elapsed)
-                        # Overwrite the same line
-                        console.print(
-                            f"🎤 [bold blue]Recording ...... {time_str} Press Enter to stop[/bold blue]", end="\r"
-                        )
-                        time.sleep(1)
-
-                # Start timer thread
-                timer_thread = threading.Thread(target=update_timer)
-                timer_thread.daemon = True
-                timer_thread.start()
-
-                # Wait for user input
+            with stream, Live(timer, console=console, refresh_per_second=4, transient=True):
                 input()
-
-                # Stop timer and wait for thread to finish
-                recording_stopped.set()
-                timer_thread.join(timeout=2)  # Wait up to 2 seconds for thread to finish
-
-                # Clear the recording line completely
-                console.print(" " * 50, end="\r")  # Clear line with spaces
-
         except KeyboardInterrupt:
-            recording_stopped.set()
-            console.print("\n⏹️ [bold yellow]Recording cancelled[/bold yellow]")
+            console.print("⏹️ [bold yellow]Recording cancelled[/bold yellow]")
             self._close_wave_file()
             sys.exit(0)
         finally:
-            recording_stopped.set()
             self._close_wave_file()
 
         if self.recording_frames == 0:
@@ -186,7 +169,7 @@ class WhisperTranscriber:
         except Exception as e:
             raise RuntimeError(f"Failed to load model '{self.model_name}': {e}") from e
 
-    def transcribe(self, audio_source: Path | str, show_progress: bool = True) -> str:
+    def transcribe(self, audio_source: Path | str) -> str:
         transcribe_kwargs = {
             "beam_size": 5,
             "vad_filter": True,
@@ -196,57 +179,11 @@ class WhisperTranscriber:
         if self.language:
             transcribe_kwargs["language"] = self.language
 
+        timer = TimerLine("🔄 [bold blue]Transcribing ... {elapsed}[/bold blue]")
         try:
-            start_time = time.time()
-
-            if show_progress:
-                import queue
-                import threading
-
-                progress_queue = queue.Queue()
-                transcription_complete = threading.Event()
-
-                def transcribe_worker():
-                    """Worker function to perform transcription in background."""
-                    try:
-                        segments, _ = self.model.transcribe(str(audio_source), **transcribe_kwargs)
-                        transcription_parts = []
-                        for segment in segments:
-                            text = segment.text.strip()
-                            if text:
-                                transcription_parts.append(text)
-                        progress_queue.put(("result", transcription_parts))
-                    except Exception as e:
-                        progress_queue.put(("error", e))
-                    finally:
-                        transcription_complete.set()
-
-                # Start transcription in background
-                worker_thread = threading.Thread(target=transcribe_worker)
-                worker_thread.daemon = True
-                worker_thread.start()
-
-                # Simple progress display with elapsed timer
-                while not transcription_complete.is_set():
-                    elapsed = time.time() - start_time
-                    time_str = format_duration(elapsed)
-                    console.print(f"🔄 [bold blue]Transcribing ... {time_str}[/bold blue]", end="\r")
-                    time.sleep(1)
-
-                # Print a new line
-                console.print("")
-
-                result_type, result_data = progress_queue.get()
-                if result_type == "error":
-                    raise result_data
-                transcription_parts = result_data
-            else:
+            with Live(timer, console=console, refresh_per_second=4, transient=True):
                 segments, _ = self.model.transcribe(str(audio_source), **transcribe_kwargs)
-                transcription_parts = []
-                for segment in segments:
-                    text = segment.text.strip()
-                    if text:
-                        transcription_parts.append(text)
+                transcription_parts = [text for segment in segments if (text := segment.text.strip())]
         except Exception as e:
             raise RuntimeError(f"Transcription failed: {e}") from e
 
@@ -297,7 +234,7 @@ def main(sample_rate: int, channels: int, list_models: bool, language: str | Non
             recorder = AudioRecorder(sample_rate, channels)
             audio_file_path = recorder.record()
         transcriber = WhisperTranscriber(language=language)
-        transcription = transcriber.transcribe(audio_file_path, show_progress=True)
+        transcription = transcriber.transcribe(audio_file_path)
 
         try:
             copy_to_clipboard(transcription)
