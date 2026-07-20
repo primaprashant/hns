@@ -9,9 +9,11 @@ import numpy as np
 import pyperclip
 from rich.console import Console
 from rich.live import Live
+from rich.markup import escape
 from rich.text import Text
 
 console = Console(stderr=True)
+SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
 
 def format_duration(seconds: float) -> str:
@@ -37,7 +39,12 @@ class TimerLine:
         return time.time() - self.start_time
 
     def __rich__(self) -> Text:
-        return Text.from_markup(self.template.format(elapsed=format_duration(self.elapsed)))
+        spinner = SPINNER_FRAMES[int(self.elapsed * 10) % len(SPINNER_FRAMES)]
+        return Text.from_markup(self.template.format(elapsed=format_duration(self.elapsed), spinner=spinner))
+
+
+def live_line(line: TimerLine) -> Live:
+    return Live(line, console=console, refresh_per_second=10, transient=True)
 
 
 def get_audio_file_path() -> Path:
@@ -63,9 +70,13 @@ class AudioRecorder:
         self.wave_file = None
         self.recording_frames = 0
 
+    @property
+    def duration(self) -> float:
+        return self.recording_frames / self.sample_rate
+
     def _audio_callback(self, indata, frames, time_info, status):
         if status:
-            console.print(f"⚠️ [bold yellow]Audio warning: {status}[/bold yellow]")
+            console.print(f"[yellow]![/yellow] audio warning: {escape(str(status))}")
         if self.wave_file:
             audio_int16 = (indata * 32767).astype(np.int16)
             self.wave_file.writeframes(audio_int16.tobytes())
@@ -74,7 +85,7 @@ class AudioRecorder:
     def record(self) -> Path:
         if not sys.stdin.isatty():
             raise RuntimeError(
-                "Recording needs an interactive terminal. Use --last to retranscribe the previous recording."
+                "recording needs an interactive terminal; use --last to retranscribe the previous recording"
             )
 
         self._validate_audio_device()
@@ -90,11 +101,11 @@ class AudioRecorder:
         except Exception as e:
             self._close_wave_file()
             temp_path.unlink(missing_ok=True)
-            raise RuntimeError(f"Failed to initialize audio stream: {e}") from e
+            raise RuntimeError(f"failed to initialize audio stream: {e}") from e
 
-        timer = TimerLine("🎤 [bold blue]Recording ...... {elapsed} Press Enter to stop[/bold blue]")
+        timer = TimerLine("[red]●[/red] recording {elapsed} [dim]· press enter to stop[/dim]")
         try:
-            with stream, Live(timer, console=console, refresh_per_second=4, transient=True):
+            with stream, live_line(timer):
                 input()
         except KeyboardInterrupt:
             self._close_wave_file()
@@ -105,10 +116,9 @@ class AudioRecorder:
 
         if self.recording_frames == 0:
             temp_path.unlink(missing_ok=True)
-            raise ValueError("No audio recorded")
+            raise ValueError("no audio recorded")
 
         temp_path.replace(self.audio_file_path)
-        console.print(f"⏹️ [bold blue]Recorded {format_duration(timer.elapsed)}[/bold blue]")
         return self.audio_file_path
 
     def _validate_audio_device(self):
@@ -117,7 +127,7 @@ class AudioRecorder:
 
             sd.query_devices(kind="input")
         except Exception as e:
-            raise RuntimeError(f"No audio input device available: {e}") from e
+            raise RuntimeError(f"no audio input device available: {e}") from e
 
     def _prepare_wave_file(self, path: Path):
         self.recording_frames = 0
@@ -164,8 +174,8 @@ class WhisperTranscriber:
         model = model_name or os.environ.get("HNS_WHISPER_MODEL", "base")
 
         if model not in self.VALID_MODELS:
-            console.print(f"⚠️ [bold yellow]Invalid model '{model}', using 'base' instead[/bold yellow]")
-            console.print(f"    [dim]Available models: {', '.join(self.VALID_MODELS)}[/dim]")
+            console.print(f"[yellow]![/yellow] invalid model '{escape(model)}', using 'base'")
+            console.print("  [dim]run hns --list-models to see available models[/dim]")
             return "base"
 
         return model
@@ -173,11 +183,12 @@ class WhisperTranscriber:
     def _load_model(self):
         from faster_whisper import WhisperModel
 
-        console.print(f"⏳ [dim]Loading model '{self.model_name}' (first use downloads it)[/dim]")
+        timer = TimerLine(f"[cyan]{{spinner}}[/cyan] loading {self.model_name} model")
         try:
-            return WhisperModel(self.model_name, device="cpu", compute_type="int8")
+            with live_line(timer):
+                return WhisperModel(self.model_name, device="cpu", compute_type="int8")
         except Exception as e:
-            raise RuntimeError(f"Failed to load model '{self.model_name}': {e}") from e
+            raise RuntimeError(f"failed to load model '{self.model_name}': {e}") from e
 
     def transcribe(self, audio_source: Path | str) -> str:
         transcribe_kwargs = {
@@ -189,41 +200,39 @@ class WhisperTranscriber:
         if self.language:
             transcribe_kwargs["language"] = self.language
 
-        timer = TimerLine("🔄 [bold blue]Transcribing ... {elapsed}[/bold blue]")
+        timer = TimerLine("[cyan]{spinner}[/cyan] transcribing [dim]{elapsed}[/dim]")
         try:
-            with Live(timer, console=console, refresh_per_second=4, transient=True):
+            with live_line(timer):
                 segments, _ = self.model.transcribe(str(audio_source), **transcribe_kwargs)
                 transcription_parts = [text for segment in segments if (text := segment.text.strip())]
         except Exception as e:
-            raise RuntimeError(f"Transcription failed: {e}") from e
+            raise RuntimeError(f"transcription failed: {e}") from e
 
         full_transcription = " ".join(transcription_parts)
         if not full_transcription:
-            raise ValueError("No speech detected in audio")
+            raise ValueError("no speech detected in audio")
 
-        console.print(f"✅ [bold green]Transcribed in {format_duration(timer.elapsed)}[/bold green]")
         return full_transcription
 
     @classmethod
     def list_models(cls):
-        console.print("ℹ️ [bold cyan]Available Whisper models:[/bold cyan]")
         for model in cls.VALID_MODELS:
             click.echo(model)
-        console.print("\nℹ️ [bold cyan]Environment variables:[/bold cyan]")
-        console.print("  [dim]export HNS_WHISPER_MODEL=<model-name>[/dim]")
-        console.print("  [dim]export HNS_LANG=<language-code>  # e.g., en, es, fr[/dim]")
-        console.print("  [dim]export HNS_CACHE_DIR=<cache-dir>  # override last_recording.wav location[/dim]")
+        console.print("\n[dim]environment variables:[/dim]")
+        console.print("[dim]  HNS_WHISPER_MODEL=<model-name>   default model (base)[/dim]")
+        console.print("[dim]  HNS_LANG=<language-code>         e.g. en, es, fr[/dim]")
+        console.print("[dim]  HNS_CACHE_DIR=<dir>              last_recording.wav location[/dim]")
 
 
-def copy_to_clipboard(text: str):
+def copy_to_clipboard(text: str) -> bool:
     try:
         pyperclip.copy(text)
     except Exception as e:
-        console.print(f"⚠️ [bold yellow]Failed to copy to clipboard: {e}[/bold yellow]")
+        console.print(f"[yellow]![/yellow] clipboard copy failed: {escape(str(e))}")
         if sys.platform.startswith("linux"):
-            console.print("    [dim]Install xclip, xsel, or wl-clipboard to enable clipboard support[/dim]")
-        return
-    console.print("✅ [bold green]Copied to clipboard![/bold green]")
+            console.print("  [dim]install xclip, xsel, or wl-clipboard for clipboard support[/dim]")
+        return False
+    return True
 
 
 @click.command()
@@ -246,31 +255,42 @@ def main(model: str | None, language: str | None, last: bool, no_copy: bool, lis
         return
 
     try:
+        recorded_duration = None
         if last:
             audio_file_path = get_audio_file_path()
             if not audio_file_path.exists():
-                console.print(
-                    "❌ [bold red]No previous recording found. Record audio first by running 'hns' without --last flag.[/bold red]"
-                )
+                console.print("[red]✗[/red] no previous recording found · run hns without --last to record one")
                 sys.exit(1)
         else:
-            audio_file_path = AudioRecorder().record()
+            recorder = AudioRecorder()
+            audio_file_path = recorder.record()
+            recorded_duration = recorder.duration
+
         transcriber = WhisperTranscriber(model_name=model, language=language)
+        transcribe_start = time.time()
         transcription = transcriber.transcribe(audio_file_path)
+        transcribe_seconds = time.time() - transcribe_start
 
-        if not no_copy:
-            copy_to_clipboard(transcription)
+        copied = copy_to_clipboard(transcription) if not no_copy else False
 
+        summary = []
+        if recorded_duration is not None:
+            summary.append(f"recorded {format_duration(recorded_duration)}")
+        summary.append(f"transcribed in {transcribe_seconds:.1f}s")
+        if copied:
+            summary.append("copied to clipboard")
+        console.print(f"[green]✓[/green] [dim]{' · '.join(summary)}[/dim]")
+        console.print()
         click.echo(transcription)
 
     except KeyboardInterrupt:
-        console.print("⏹️ [bold yellow]Cancelled[/bold yellow]")
+        console.print("[yellow]![/yellow] cancelled")
         sys.exit(130)
     except (RuntimeError, ValueError) as e:
-        console.print(f"❌ [bold red]{e}[/bold red]")
+        console.print(f"[red]✗[/red] {escape(str(e))}")
         sys.exit(1)
     except Exception as e:
-        console.print(f"❌ [bold red]Unexpected error: {e}[/bold red]")
+        console.print(f"[red]✗[/red] unexpected error: {escape(str(e))}")
         sys.exit(1)
 
 
