@@ -44,14 +44,20 @@ There is no full automated test suite. For behavior changes, run `make test-help
 - `HNS_WHISPER_MODEL`: default Whisper model when no explicit model is passed internally; invalid values fall back to `base`.
 - `HNS_LANG`: optional language code passed to Whisper, e.g. `en`, `es`, `fr`.
 - `HNS_CACHE_DIR`: optional cache directory override for `last_recording.wav`, mainly useful for isolated fixture tests.
+- `--model`/`-m`: CLI override for the Whisper model; takes precedence over `HNS_WHISPER_MODEL`.
 - `--language`: CLI override for transcription language.
 - `--last`: retranscribes the cached last recording instead of recording new audio.
+- `--no-copy`: skips copying the transcription to the clipboard.
+- `--list-models`: prints model names to stdout; usage hints go to stderr.
+- `--version`: prints the installed version.
 
 Cached audio is written to the platform cache directory as `last_recording.wav`.
 
 ## Code Organization
 
 - `format_duration`: shared timer formatting.
+- `TimerLine`: elapsed-time renderable for `rich` `Live` status displays.
+- `get_audio_file_path`: resolves the cross-platform cache path for `last_recording.wav`.
 - `AudioRecorder`: validates input device, records microphone audio, writes WAV data, manages cache path.
 - `WhisperTranscriber`: validates model names, loads `faster-whisper`, transcribes audio, lists models.
 - `copy_to_clipboard`: copies final text and reports clipboard status.
@@ -79,5 +85,5 @@ Cached audio is written to the platform cache directory as `last_recording.wav`.
 - Recording/transcription paths are interactive and hardware-dependent; avoid breaking non-audio commands like `--help` and `--list-models`.
 - First transcription may download a Whisper model; do not add network requirements beyond model download behavior.
 - Clipboard failures should not prevent printing transcription to stdout.
-- Cross-platform cache paths in `AudioRecorder._get_audio_file_path` affect `--last` behavior.
+- Cross-platform cache paths in `get_audio_file_path` affect `--last` behavior.
 - Published package behavior comes from the `hns = "hns.cli:main"` console script in `pyproject.toml`.

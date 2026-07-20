@@ -124,7 +124,7 @@ class AudioRecorder:
         self.recording_frames = 0
         self.wave_file = wave.open(str(path), "wb")
         self.wave_file.setnchannels(self.channels)
-        self.wave_file.setsampwidth(2)  # 16-bit audio
+        self.wave_file.setsampwidth(2)
         self.wave_file.setframerate(self.sample_rate)
 
     def _close_wave_file(self):
