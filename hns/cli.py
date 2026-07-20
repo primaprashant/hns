@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import wave
+from contextlib import nullcontext
 from pathlib import Path
 
 import click
@@ -180,12 +181,33 @@ class WhisperTranscriber:
 
         return model
 
+    def _is_model_cached(self) -> bool:
+        import logging
+
+        from faster_whisper.utils import download_model
+
+        logger = logging.getLogger("faster_whisper")
+        original_level = logger.level
+        logger.setLevel(logging.ERROR)
+        try:
+            download_model(self.model_name, local_files_only=True)
+            return True
+        except Exception:
+            return False
+        finally:
+            logger.setLevel(original_level)
+
     def _load_model(self):
         from faster_whisper import WhisperModel
 
-        timer = TimerLine(f"[cyan]{{spinner}}[/cyan] loading {self.model_name} model")
+        if self._is_model_cached():
+            context = live_line(TimerLine(f"[cyan]{{spinner}}[/cyan] loading {self.model_name} model"))
+        else:
+            console.print(f"[cyan]↓[/cyan] downloading {self.model_name} model [dim]· first run only[/dim]")
+            context = nullcontext()
+
         try:
-            with live_line(timer):
+            with context:
                 return WhisperModel(self.model_name, device="cpu", compute_type="int8")
         except Exception as e:
             raise RuntimeError(f"failed to load model '{self.model_name}': {e}") from e
