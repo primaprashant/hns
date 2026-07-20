@@ -48,6 +48,7 @@ There is no full automated test suite. For behavior changes, run `make test-help
 - `--language`: CLI override for transcription language.
 - `--last`: retranscribes the cached last recording instead of recording new audio.
 - `--no-copy`: skips copying the transcription to the clipboard.
+- `-q`/`--quiet`: suppresses status output on stderr; warnings and errors still print.
 - `--list-models`: prints model names to stdout; usage hints go to stderr.
 - `--version`: prints the installed version.
 
@@ -56,7 +57,8 @@ Cached audio is written to the platform cache directory as `last_recording.wav`.
 ## Code Organization
 
 - `format_duration`: shared timer formatting.
-- `TimerLine`: elapsed-time renderable for `rich` `Live` status displays.
+- `TimerLine`: elapsed-time and spinner renderable for `rich` `Live` status displays.
+- `status_print`/`live_line`: status output helpers gated by the `--quiet` flag.
 - `get_audio_file_path`: resolves the cross-platform cache path for `last_recording.wav`.
 - `AudioRecorder`: validates input device, records microphone audio, writes WAV data, manages cache path.
 - `WhisperTranscriber`: validates model names, loads `faster-whisper`, transcribes audio, lists models.
@@ -73,8 +75,9 @@ Cached audio is written to the platform cache directory as `last_recording.wav`.
 ## Conventions
 
 - Keep implementation compact; avoid adding modules unless complexity clearly justifies it.
-- Preserve stdout for machine-readable transcription output only.
+- Preserve stdout for machine-readable transcription output only; write it raw via `click.echo`, never through `rich`, so piped output is unwrapped and unstyled.
 - Preserve stderr for progress, errors, warnings, and status messages through the `rich` stderr console.
+- Status messages use plain text glyphs, not emojis: `●` recording, spinner frames for in-progress work, `✓` success, `!` warning, `✗` error, `↓` download.
 - Prefer explicit, user-friendly CLI errors over tracebacks.
 - Keep dependencies minimal and justified; this is a simple CLI distributed on PyPI.
 - Manage dependencies with `uv add` or `uv add --dev`; do not edit `pyproject.toml` directly for dependency changes.
