@@ -44,14 +44,22 @@ There is no full automated test suite. For behavior changes, run `make test-help
 - `HNS_WHISPER_MODEL`: default Whisper model when no explicit model is passed internally; invalid values fall back to `base`.
 - `HNS_LANG`: optional language code passed to Whisper, e.g. `en`, `es`, `fr`.
 - `HNS_CACHE_DIR`: optional cache directory override for `last_recording.wav`, mainly useful for isolated fixture tests.
+- `--model`/`-m`: CLI override for the Whisper model; takes precedence over `HNS_WHISPER_MODEL`.
 - `--language`: CLI override for transcription language.
 - `--last`: retranscribes the cached last recording instead of recording new audio.
+- `--no-copy`: skips copying the transcription to the clipboard.
+- `-q`/`--quiet`: suppresses status output on stderr; warnings and errors still print.
+- `--list-models`: prints model names to stdout; usage hints go to stderr.
+- `--version`: prints the installed version.
 
 Cached audio is written to the platform cache directory as `last_recording.wav`.
 
 ## Code Organization
 
 - `format_duration`: shared timer formatting.
+- `TimerLine`: elapsed-time and spinner renderable for `rich` `Live` status displays.
+- `status_print`/`live_line`: status output helpers gated by the `--quiet` flag.
+- `get_audio_file_path`: resolves the cross-platform cache path for `last_recording.wav`.
 - `AudioRecorder`: validates input device, records microphone audio, writes WAV data, manages cache path.
 - `WhisperTranscriber`: validates model names, loads `faster-whisper`, transcribes audio, lists models.
 - `copy_to_clipboard`: copies final text and reports clipboard status.
@@ -67,8 +75,9 @@ Cached audio is written to the platform cache directory as `last_recording.wav`.
 ## Conventions
 
 - Keep implementation compact; avoid adding modules unless complexity clearly justifies it.
-- Preserve stdout for machine-readable transcription output only.
+- Preserve stdout for machine-readable transcription output only; write it raw via `click.echo`, never through `rich`, so piped output is unwrapped and unstyled.
 - Preserve stderr for progress, errors, warnings, and status messages through the `rich` stderr console.
+- Status messages use plain text glyphs, not emojis: `●` recording, spinner frames for in-progress work, `✓` success, `!` warning, `✗` error, `↓` download.
 - Prefer explicit, user-friendly CLI errors over tracebacks.
 - Keep dependencies minimal and justified; this is a simple CLI distributed on PyPI.
 - Manage dependencies with `uv add` or `uv add --dev`; do not edit `pyproject.toml` directly for dependency changes.
@@ -79,5 +88,5 @@ Cached audio is written to the platform cache directory as `last_recording.wav`.
 - Recording/transcription paths are interactive and hardware-dependent; avoid breaking non-audio commands like `--help` and `--list-models`.
 - First transcription may download a Whisper model; do not add network requirements beyond model download behavior.
 - Clipboard failures should not prevent printing transcription to stdout.
-- Cross-platform cache paths in `AudioRecorder._get_audio_file_path` affect `--last` behavior.
+- Cross-platform cache paths in `get_audio_file_path` affect `--last` behavior.
 - Published package behavior comes from the `hns = "hns.cli:main"` console script in `pyproject.toml`.

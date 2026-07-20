@@ -1,18 +1,26 @@
 import os
 import sys
-import threading
 import time
 import wave
+from contextlib import nullcontext
 from pathlib import Path
-from typing import Optional, Union
 
 import click
 import numpy as np
 import pyperclip
 from rich.console import Console
+from rich.live import Live
+from rich.markup import escape
+from rich.text import Text
 
 console = Console(stderr=True)
-stdout_console = Console()
+SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+QUIET = False
+
+
+def status_print(message: str = ""):
+    if not QUIET:
+        console.print(message)
 
 
 def format_duration(seconds: float) -> str:
@@ -28,25 +36,70 @@ def format_duration(seconds: float) -> str:
         return f"{minutes:02d}:{secs:02d}"
 
 
+class TimerLine:
+    def __init__(self, template: str):
+        self.template = template
+        self.start_time = time.time()
+
+    @property
+    def elapsed(self) -> float:
+        return time.time() - self.start_time
+
+    def __rich__(self) -> Text:
+        spinner = SPINNER_FRAMES[int(self.elapsed * 10) % len(SPINNER_FRAMES)]
+        return Text.from_markup(self.template.format(elapsed=format_duration(self.elapsed), spinner=spinner))
+
+
+def live_line(line: TimerLine) -> Live | nullcontext:
+    if QUIET:
+        return nullcontext()
+    return Live(line, console=console, refresh_per_second=10, transient=True)
+
+
+def get_audio_file_path() -> Path:
+    cache_dir_override = os.environ.get("HNS_CACHE_DIR")
+    if cache_dir_override:
+        cache_dir = Path(cache_dir_override).expanduser()
+    elif sys.platform == "win32":
+        cache_dir = Path.home() / "AppData" / "Local" / "hns" / "Cache"
+    elif sys.platform == "darwin":
+        cache_dir = Path.home() / "Library" / "Caches" / "hns"
+    else:
+        cache_dir = Path.home() / ".cache" / "hns"
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir / "last_recording.wav"
+
+
 class AudioRecorder:
     def __init__(self, sample_rate: int = 16000, channels: int = 1):
         self.sample_rate = sample_rate
         self.channels = channels
-        self.audio_file_path = self._get_audio_file_path()
+        self.audio_file_path = get_audio_file_path()
         self.wave_file = None
         self.recording_frames = 0
 
-    def _audio_callback(self, indata, frames, time, status):
+    @property
+    def duration(self) -> float:
+        return self.recording_frames / self.sample_rate
+
+    def _audio_callback(self, indata, frames, time_info, status):
         if status:
-            console.print(f"⚠️ [bold yellow]Audio warning: {status}[/bold yellow]")
+            console.print(f"[yellow]![/yellow] audio warning: {escape(str(status))}")
         if self.wave_file:
             audio_int16 = (indata * 32767).astype(np.int16)
             self.wave_file.writeframes(audio_int16.tobytes())
             self.recording_frames += frames
 
     def record(self) -> Path:
+        if not sys.stdin.isatty():
+            raise RuntimeError(
+                "recording needs an interactive terminal; use --last to retranscribe the previous recording"
+            )
+
         self._validate_audio_device()
-        self._prepare_wave_file()
+        temp_path = self.audio_file_path.with_name(self.audio_file_path.name + ".tmp")
+        self._prepare_wave_file(temp_path)
 
         try:
             import sounddevice as sd
@@ -56,84 +109,40 @@ class AudioRecorder:
             )
         except Exception as e:
             self._close_wave_file()
-            raise RuntimeError(f"Failed to initialize audio stream: {e}")
+            temp_path.unlink(missing_ok=True)
+            raise RuntimeError(f"failed to initialize audio stream: {e}") from e
 
-        # Setup timer for live recording display
-        start_time = time.time()
-        recording_stopped = threading.Event()
-
+        timer = TimerLine("[red]●[/red] recording {elapsed} [dim]· press enter to stop[/dim]")
         try:
-            with stream:
-
-                def update_timer():
-                    """Update the display with elapsed time."""
-                    while not recording_stopped.is_set():
-                        elapsed = time.time() - start_time
-                        time_str = format_duration(elapsed)
-                        # Overwrite the same line
-                        console.print(
-                            f"🎤 [bold blue]Recording ...... {time_str} Press Enter to stop[/bold blue]", end="\r"
-                        )
-                        time.sleep(1)
-
-                # Start timer thread
-                timer_thread = threading.Thread(target=update_timer)
-                timer_thread.daemon = True
-                timer_thread.start()
-
-                # Wait for user input
+            with stream, live_line(timer):
                 input()
-
-                # Stop timer and wait for thread to finish
-                recording_stopped.set()
-                timer_thread.join(timeout=2)  # Wait up to 2 seconds for thread to finish
-
-                # Clear the recording line completely
-                console.print(" " * 50, end="\r")  # Clear line with spaces
-
         except KeyboardInterrupt:
-            recording_stopped.set()
-            console.print("\n⏹️ [bold yellow]Recording cancelled[/bold yellow]")
             self._close_wave_file()
-            sys.exit(0)
+            temp_path.unlink(missing_ok=True)
+            raise
         finally:
-            recording_stopped.set()
             self._close_wave_file()
 
         if self.recording_frames == 0:
-            raise ValueError("No audio recorded")
+            temp_path.unlink(missing_ok=True)
+            raise ValueError("no audio recorded")
 
+        temp_path.replace(self.audio_file_path)
         return self.audio_file_path
 
     def _validate_audio_device(self):
         try:
             import sounddevice as sd
 
-            default_input = sd.query_devices(kind="input")
-            if default_input is None:
-                raise RuntimeError("No audio input device found")
+            sd.query_devices(kind="input")
         except Exception as e:
-            raise RuntimeError(f"Failed to access audio devices: {e}")
+            raise RuntimeError(f"no audio input device available: {e}") from e
 
-    def _get_audio_file_path(self) -> Path:
-        cache_dir_override = os.environ.get("HNS_CACHE_DIR")
-        if cache_dir_override:
-            cache_dir = Path(cache_dir_override).expanduser()
-        elif sys.platform == "win32":
-            cache_dir = Path.home() / "AppData" / "Local" / "hns" / "Cache"
-        elif sys.platform == "darwin":
-            cache_dir = Path.home() / "Library" / "Caches" / "hns"
-        else:
-            cache_dir = Path.home() / ".cache" / "hns"
-
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        return cache_dir / "last_recording.wav"
-
-    def _prepare_wave_file(self):
+    def _prepare_wave_file(self, path: Path):
         self.recording_frames = 0
-        self.wave_file = wave.open(str(self.audio_file_path), "wb")
+        self.wave_file = wave.open(str(path), "wb")
         self.wave_file.setnchannels(self.channels)
-        self.wave_file.setsampwidth(2)  # 16-bit audio
+        self.wave_file.setsampwidth(2)
         self.wave_file.setframerate(self.sample_rate)
 
     def _close_wave_file(self):
@@ -143,7 +152,7 @@ class AudioRecorder:
 
 
 class WhisperTranscriber:
-    VALID_MODELS = [
+    VALID_MODELS = (
         "tiny.en",
         "tiny",
         "base.en",
@@ -163,43 +172,55 @@ class WhisperTranscriber:
         "distil-large-v3.5",
         "large-v3-turbo",
         "turbo",
-    ]
+    )
 
-    def __init__(self, model_name: Optional[str] = None, language: Optional[str] = None):
+    def __init__(self, model_name: str | None = None, language: str | None = None):
         self.model_name = self._get_model_name(model_name)
         self.language = language or os.environ.get("HNS_LANG")
         self.model = self._load_model()
 
-    def _get_audio_duration(self, audio_file_path: Union[Path, str]) -> Optional[float]:
-        """Get duration of audio file in seconds."""
-        try:
-            with wave.open(str(audio_file_path), "rb") as audio_file:
-                frames = audio_file.getnframes()
-                sample_rate = audio_file.getframerate()
-                duration = frames / float(sample_rate)
-                return duration
-        except Exception:
-            return None
-
-    def _get_model_name(self, model_name: Optional[str]) -> str:
+    def _get_model_name(self, model_name: str | None) -> str:
         model = model_name or os.environ.get("HNS_WHISPER_MODEL", "base")
 
         if model not in self.VALID_MODELS:
-            console.print(f"⚠️ [bold yellow]Invalid model '{model}', using 'base' instead[/bold yellow]")
-            console.print(f"    [dim]Available models: {', '.join(self.VALID_MODELS)}[/dim]")
+            console.print(f"[yellow]![/yellow] invalid model '{escape(model)}', using 'base'")
+            console.print("  [dim]run hns --list-models to see available models[/dim]")
             return "base"
 
         return model
 
+    def _is_model_cached(self) -> bool:
+        import logging
+
+        from faster_whisper.utils import download_model
+
+        logger = logging.getLogger("faster_whisper")
+        original_level = logger.level
+        logger.setLevel(logging.ERROR)
+        try:
+            download_model(self.model_name, local_files_only=True)
+            return True
+        except Exception:
+            return False
+        finally:
+            logger.setLevel(original_level)
+
     def _load_model(self):
         from faster_whisper import WhisperModel
 
-        try:
-            return WhisperModel(self.model_name, device="cpu", compute_type="int8")
-        except Exception as e:
-            raise RuntimeError(f"Failed to load model: {e}")
+        if self._is_model_cached():
+            context = live_line(TimerLine(f"[cyan]{{spinner}}[/cyan] loading {self.model_name} model"))
+        else:
+            status_print(f"[cyan]↓[/cyan] downloading {self.model_name} model [dim]· first run only[/dim]")
+            context = nullcontext()
 
-    def transcribe(self, audio_source: Union[Path, str], show_progress: bool = True) -> str:
+        try:
+            with context:
+                return WhisperModel(self.model_name, device="cpu", compute_type="int8")
+        except Exception as e:
+            raise RuntimeError(f"failed to load model '{self.model_name}': {e}") from e
+
+    def transcribe(self, audio_source: Path | str) -> str:
         transcribe_kwargs = {
             "beam_size": 5,
             "vad_filter": True,
@@ -209,123 +230,103 @@ class WhisperTranscriber:
         if self.language:
             transcribe_kwargs["language"] = self.language
 
+        timer = TimerLine("[cyan]{spinner}[/cyan] transcribing [dim]{elapsed}[/dim]")
         try:
-            start_time = time.time()
-
-            if show_progress:
-                import queue
-                import threading
-
-                progress_queue = queue.Queue()
-                transcription_complete = threading.Event()
-
-                def transcribe_worker():
-                    """Worker function to perform transcription in background."""
-                    try:
-                        segments, _ = self.model.transcribe(str(audio_source), **transcribe_kwargs)
-                        transcription_parts = []
-                        for segment in segments:
-                            text = segment.text.strip()
-                            if text:
-                                transcription_parts.append(text)
-                        progress_queue.put(("result", transcription_parts))
-                    except Exception as e:
-                        progress_queue.put(("error", e))
-                    finally:
-                        transcription_complete.set()
-
-                # Start transcription in background
-                worker_thread = threading.Thread(target=transcribe_worker)
-                worker_thread.daemon = True
-                worker_thread.start()
-
-                # Simple progress display with elapsed timer
-                while not transcription_complete.is_set():
-                    elapsed = time.time() - start_time
-                    time_str = format_duration(elapsed)
-                    console.print(f"🔄 [bold blue]Transcribing ... {time_str}[/bold blue]", end="\r")
-                    time.sleep(1)
-
-                # Print a new line
-                console.print("")
-
-                result_type, result_data = progress_queue.get()
-                if result_type == "error":
-                    raise result_data
-                transcription_parts = result_data
-            else:
+            with live_line(timer):
                 segments, _ = self.model.transcribe(str(audio_source), **transcribe_kwargs)
-                transcription_parts = []
-                for segment in segments:
-                    text = segment.text.strip()
-                    if text:
-                        transcription_parts.append(text)
-
-            full_transcription = " ".join(transcription_parts)
-            if not full_transcription:
-                raise ValueError("No speech detected in audio")
-
-            elapsed_total = time.time() - start_time
-            return full_transcription, elapsed_total if show_progress else None
+                transcription_parts = [text for segment in segments if (text := segment.text.strip())]
         except Exception as e:
-            raise RuntimeError(f"Transcription failed: {e}")
+            raise RuntimeError(f"transcription failed: {e}") from e
+
+        full_transcription = " ".join(transcription_parts)
+        if not full_transcription:
+            raise ValueError("no speech detected in audio")
+
+        return full_transcription
 
     @classmethod
     def list_models(cls):
-        console.print("ℹ️ [bold cyan]Available Whisper models:[/bold cyan]")
         for model in cls.VALID_MODELS:
-            console.print(f"  • [dim]{model}[/dim]")
-        console.print("\nℹ️ [bold cyan]Environment variables:[/bold cyan]")
-        console.print("  [dim]export HNS_WHISPER_MODEL=<model-name>[/dim]")
-        console.print("  [dim]export HNS_LANG=<language-code>  # e.g., en, es, fr[/dim]")
-        console.print("  [dim]export HNS_CACHE_DIR=<cache-dir>  # override last_recording.wav location[/dim]")
+            click.echo(model)
+        console.print("\n[dim]environment variables:[/dim]")
+        console.print("[dim]  HNS_WHISPER_MODEL=<model-name>   default model (base)[/dim]")
+        console.print("[dim]  HNS_LANG=<language-code>         e.g. en, es, fr[/dim]")
+        console.print("[dim]  HNS_CACHE_DIR=<dir>              last_recording.wav location[/dim]")
 
 
-def copy_to_clipboard(text: str):
-    pyperclip.copy(text)
-    console.print("✅ [bold green]Copied to clipboard![/bold green]")
+def copy_to_clipboard(text: str) -> bool:
+    try:
+        pyperclip.copy(text)
+    except Exception as e:
+        console.print(f"[yellow]![/yellow] clipboard copy failed: {escape(str(e))}")
+        if sys.platform.startswith("linux"):
+            console.print("  [dim]install xclip, xsel, or wl-clipboard for clipboard support[/dim]")
+        return False
+    return True
 
 
 @click.command()
-@click.option("--sample-rate", default=16000, help="Sample rate for audio recording")
-@click.option("--channels", default=1, help="Number of audio channels")
-@click.option("--list-models", is_flag=True, help="List available Whisper models and exit")
+@click.version_option(package_name="hns", prog_name="hns")
+@click.option(
+    "--model",
+    "-m",
+    type=click.Choice(WhisperTranscriber.VALID_MODELS),
+    help="Whisper model to use. Defaults to HNS_WHISPER_MODEL env var or 'base'",
+)
 @click.option("--language", help="Force language detection (e.g., en, es, fr). Can also use HNS_LANG env var")
 @click.option("--last", is_flag=True, help="Transcribe the last recorded audio file")
-def main(sample_rate: int, channels: int, list_models: bool, language: Optional[str], last: bool):
+@click.option("--no-copy", is_flag=True, help="Do not copy the transcription to the clipboard")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress status output; warnings and errors still print")
+@click.option("--list-models", is_flag=True, help="List available Whisper models and exit")
+def main(model: str | None, language: str | None, last: bool, no_copy: bool, quiet: bool, list_models: bool):
     """Record audio from microphone, transcribe it, and copy to clipboard."""
+
+    global QUIET
+    QUIET = quiet
+    if quiet:
+        os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 
     if list_models:
         WhisperTranscriber.list_models()
         return
 
     try:
+        recorded_duration = None
         if last:
-            recorder = AudioRecorder(sample_rate, channels)
-            audio_file_path = recorder._get_audio_file_path()
+            audio_file_path = get_audio_file_path()
             if not audio_file_path.exists():
-                console.print(
-                    "❌ [bold red]No previous recording found. Record audio first by running 'hns' without --last flag.[/bold red]"
-                )
+                console.print("[red]✗[/red] no previous recording found · run hns without --last to record one")
                 sys.exit(1)
         else:
-            recorder = AudioRecorder(sample_rate, channels)
+            recorder = AudioRecorder()
             audio_file_path = recorder.record()
-        transcriber = WhisperTranscriber(language=language)
-        transcription, _ = transcriber.transcribe(audio_file_path, show_progress=True)
+            recorded_duration = recorder.duration
 
-        try:
-            copy_to_clipboard(transcription)
-        except Exception as e:
-            console.print(f"⚠️ [bold yellow]Failed to copy to clipboard: {e}[/bold yellow]")
+        transcriber = WhisperTranscriber(model_name=model, language=language)
+        transcribe_start = time.time()
+        transcription = transcriber.transcribe(audio_file_path)
+        transcribe_seconds = time.time() - transcribe_start
 
-        stdout_console.print(transcription)
+        copied = copy_to_clipboard(transcription) if not no_copy else False
 
+        summary = []
+        if recorded_duration is not None:
+            summary.append(f"recorded {format_duration(recorded_duration)}")
+        summary.append(f"transcribed in {transcribe_seconds:.1f}s")
+        if copied:
+            summary.append("copied to clipboard")
+        status_print(f"[green]✓[/green] [dim]{' · '.join(summary)}[/dim]")
+        status_print()
+        click.echo(transcription)
+
+    except KeyboardInterrupt:
+        console.print("[yellow]![/yellow] cancelled")
+        sys.exit(130)
     except (RuntimeError, ValueError) as e:
-        console.print(f"❌ [bold red]{e}[/bold red]")
+        console.print(f"[red]✗[/red] {escape(str(e))}")
         sys.exit(1)
     except Exception as e:
-        console.print(f"❌ [bold red]Unexpected error: {e}[/bold red]")
+        console.print(f"[red]✗[/red] unexpected error: {escape(str(e))}")
         sys.exit(1)
 
 
