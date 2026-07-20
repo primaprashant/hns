@@ -15,6 +15,12 @@ from rich.text import Text
 
 console = Console(stderr=True)
 SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+QUIET = False
+
+
+def status_print(message: str = ""):
+    if not QUIET:
+        console.print(message)
 
 
 def format_duration(seconds: float) -> str:
@@ -44,7 +50,9 @@ class TimerLine:
         return Text.from_markup(self.template.format(elapsed=format_duration(self.elapsed), spinner=spinner))
 
 
-def live_line(line: TimerLine) -> Live:
+def live_line(line: TimerLine) -> Live | nullcontext:
+    if QUIET:
+        return nullcontext()
     return Live(line, console=console, refresh_per_second=10, transient=True)
 
 
@@ -203,7 +211,7 @@ class WhisperTranscriber:
         if self._is_model_cached():
             context = live_line(TimerLine(f"[cyan]{{spinner}}[/cyan] loading {self.model_name} model"))
         else:
-            console.print(f"[cyan]↓[/cyan] downloading {self.model_name} model [dim]· first run only[/dim]")
+            status_print(f"[cyan]↓[/cyan] downloading {self.model_name} model [dim]· first run only[/dim]")
             context = nullcontext()
 
         try:
@@ -268,9 +276,15 @@ def copy_to_clipboard(text: str) -> bool:
 @click.option("--language", help="Force language detection (e.g., en, es, fr). Can also use HNS_LANG env var")
 @click.option("--last", is_flag=True, help="Transcribe the last recorded audio file")
 @click.option("--no-copy", is_flag=True, help="Do not copy the transcription to the clipboard")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress status output; warnings and errors still print")
 @click.option("--list-models", is_flag=True, help="List available Whisper models and exit")
-def main(model: str | None, language: str | None, last: bool, no_copy: bool, list_models: bool):
+def main(model: str | None, language: str | None, last: bool, no_copy: bool, quiet: bool, list_models: bool):
     """Record audio from microphone, transcribe it, and copy to clipboard."""
+
+    global QUIET
+    QUIET = quiet
+    if quiet:
+        os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 
     if list_models:
         WhisperTranscriber.list_models()
@@ -301,8 +315,8 @@ def main(model: str | None, language: str | None, last: bool, no_copy: bool, lis
         summary.append(f"transcribed in {transcribe_seconds:.1f}s")
         if copied:
             summary.append("copied to clipboard")
-        console.print(f"[green]✓[/green] [dim]{' · '.join(summary)}[/dim]")
-        console.print()
+        status_print(f"[green]✓[/green] [dim]{' · '.join(summary)}[/dim]")
+        status_print()
         click.echo(transcription)
 
     except KeyboardInterrupt:
