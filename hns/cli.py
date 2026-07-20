@@ -109,6 +109,7 @@ class AudioRecorder:
             raise ValueError("No audio recorded")
 
         temp_path.replace(self.audio_file_path)
+        console.print(f"⏹️ [bold blue]Recorded {format_duration(timer.elapsed)}[/bold blue]")
         return self.audio_file_path
 
     def _validate_audio_device(self):
@@ -173,6 +174,7 @@ class WhisperTranscriber:
     def _load_model(self):
         from faster_whisper import WhisperModel
 
+        console.print(f"⏳ [dim]Loading model '{self.model_name}' (first use downloads it)[/dim]")
         try:
             return WhisperModel(self.model_name, device="cpu", compute_type="int8")
         except Exception as e:
@@ -200,13 +202,14 @@ class WhisperTranscriber:
         if not full_transcription:
             raise ValueError("No speech detected in audio")
 
+        console.print(f"✅ [bold green]Transcribed in {format_duration(timer.elapsed)}[/bold green]")
         return full_transcription
 
     @classmethod
     def list_models(cls):
         console.print("ℹ️ [bold cyan]Available Whisper models:[/bold cyan]")
         for model in cls.VALID_MODELS:
-            console.print(f"  • [dim]{model}[/dim]")
+            stdout_console.print(model)
         console.print("\nℹ️ [bold cyan]Environment variables:[/bold cyan]")
         console.print("  [dim]export HNS_WHISPER_MODEL=<model-name>[/dim]")
         console.print("  [dim]export HNS_LANG=<language-code>  # e.g., en, es, fr[/dim]")
@@ -214,7 +217,13 @@ class WhisperTranscriber:
 
 
 def copy_to_clipboard(text: str):
-    pyperclip.copy(text)
+    try:
+        pyperclip.copy(text)
+    except Exception as e:
+        console.print(f"⚠️ [bold yellow]Failed to copy to clipboard: {e}[/bold yellow]")
+        if sys.platform.startswith("linux"):
+            console.print("    [dim]Install xclip, xsel, or wl-clipboard to enable clipboard support[/dim]")
+        return
     console.print("✅ [bold green]Copied to clipboard![/bold green]")
 
 
@@ -251,10 +260,7 @@ def main(model: str | None, language: str | None, last: bool, no_copy: bool, lis
         transcription = transcriber.transcribe(audio_file_path)
 
         if not no_copy:
-            try:
-                copy_to_clipboard(transcription)
-            except Exception as e:
-                console.print(f"⚠️ [bold yellow]Failed to copy to clipboard: {e}[/bold yellow]")
+            copy_to_clipboard(transcription)
 
         stdout_console.print(transcription)
 
