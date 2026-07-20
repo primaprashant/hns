@@ -4,7 +4,6 @@ import threading
 import time
 import wave
 from pathlib import Path
-from typing import Optional, Union
 
 import click
 import numpy as np
@@ -28,15 +27,30 @@ def format_duration(seconds: float) -> str:
         return f"{minutes:02d}:{secs:02d}"
 
 
+def get_audio_file_path() -> Path:
+    cache_dir_override = os.environ.get("HNS_CACHE_DIR")
+    if cache_dir_override:
+        cache_dir = Path(cache_dir_override).expanduser()
+    elif sys.platform == "win32":
+        cache_dir = Path.home() / "AppData" / "Local" / "hns" / "Cache"
+    elif sys.platform == "darwin":
+        cache_dir = Path.home() / "Library" / "Caches" / "hns"
+    else:
+        cache_dir = Path.home() / ".cache" / "hns"
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir / "last_recording.wav"
+
+
 class AudioRecorder:
     def __init__(self, sample_rate: int = 16000, channels: int = 1):
         self.sample_rate = sample_rate
         self.channels = channels
-        self.audio_file_path = self._get_audio_file_path()
+        self.audio_file_path = get_audio_file_path()
         self.wave_file = None
         self.recording_frames = 0
 
-    def _audio_callback(self, indata, frames, time, status):
+    def _audio_callback(self, indata, frames, time_info, status):
         if status:
             console.print(f"⚠️ [bold yellow]Audio warning: {status}[/bold yellow]")
         if self.wave_file:
@@ -56,7 +70,7 @@ class AudioRecorder:
             )
         except Exception as e:
             self._close_wave_file()
-            raise RuntimeError(f"Failed to initialize audio stream: {e}")
+            raise RuntimeError(f"Failed to initialize audio stream: {e}") from e
 
         # Setup timer for live recording display
         start_time = time.time()
@@ -109,25 +123,9 @@ class AudioRecorder:
         try:
             import sounddevice as sd
 
-            default_input = sd.query_devices(kind="input")
-            if default_input is None:
-                raise RuntimeError("No audio input device found")
+            sd.query_devices(kind="input")
         except Exception as e:
-            raise RuntimeError(f"Failed to access audio devices: {e}")
-
-    def _get_audio_file_path(self) -> Path:
-        cache_dir_override = os.environ.get("HNS_CACHE_DIR")
-        if cache_dir_override:
-            cache_dir = Path(cache_dir_override).expanduser()
-        elif sys.platform == "win32":
-            cache_dir = Path.home() / "AppData" / "Local" / "hns" / "Cache"
-        elif sys.platform == "darwin":
-            cache_dir = Path.home() / "Library" / "Caches" / "hns"
-        else:
-            cache_dir = Path.home() / ".cache" / "hns"
-
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        return cache_dir / "last_recording.wav"
+            raise RuntimeError(f"No audio input device available: {e}") from e
 
     def _prepare_wave_file(self):
         self.recording_frames = 0
@@ -143,7 +141,7 @@ class AudioRecorder:
 
 
 class WhisperTranscriber:
-    VALID_MODELS = [
+    VALID_MODELS = (
         "tiny.en",
         "tiny",
         "base.en",
@@ -163,25 +161,14 @@ class WhisperTranscriber:
         "distil-large-v3.5",
         "large-v3-turbo",
         "turbo",
-    ]
+    )
 
-    def __init__(self, model_name: Optional[str] = None, language: Optional[str] = None):
+    def __init__(self, model_name: str | None = None, language: str | None = None):
         self.model_name = self._get_model_name(model_name)
         self.language = language or os.environ.get("HNS_LANG")
         self.model = self._load_model()
 
-    def _get_audio_duration(self, audio_file_path: Union[Path, str]) -> Optional[float]:
-        """Get duration of audio file in seconds."""
-        try:
-            with wave.open(str(audio_file_path), "rb") as audio_file:
-                frames = audio_file.getnframes()
-                sample_rate = audio_file.getframerate()
-                duration = frames / float(sample_rate)
-                return duration
-        except Exception:
-            return None
-
-    def _get_model_name(self, model_name: Optional[str]) -> str:
+    def _get_model_name(self, model_name: str | None) -> str:
         model = model_name or os.environ.get("HNS_WHISPER_MODEL", "base")
 
         if model not in self.VALID_MODELS:
@@ -197,9 +184,9 @@ class WhisperTranscriber:
         try:
             return WhisperModel(self.model_name, device="cpu", compute_type="int8")
         except Exception as e:
-            raise RuntimeError(f"Failed to load model: {e}")
+            raise RuntimeError(f"Failed to load model '{self.model_name}': {e}") from e
 
-    def transcribe(self, audio_source: Union[Path, str], show_progress: bool = True) -> str:
+    def transcribe(self, audio_source: Path | str, show_progress: bool = True) -> str:
         transcribe_kwargs = {
             "beam_size": 5,
             "vad_filter": True,
@@ -260,15 +247,14 @@ class WhisperTranscriber:
                     text = segment.text.strip()
                     if text:
                         transcription_parts.append(text)
-
-            full_transcription = " ".join(transcription_parts)
-            if not full_transcription:
-                raise ValueError("No speech detected in audio")
-
-            elapsed_total = time.time() - start_time
-            return full_transcription, elapsed_total if show_progress else None
         except Exception as e:
-            raise RuntimeError(f"Transcription failed: {e}")
+            raise RuntimeError(f"Transcription failed: {e}") from e
+
+        full_transcription = " ".join(transcription_parts)
+        if not full_transcription:
+            raise ValueError("No speech detected in audio")
+
+        return full_transcription
 
     @classmethod
     def list_models(cls):
@@ -292,7 +278,7 @@ def copy_to_clipboard(text: str):
 @click.option("--list-models", is_flag=True, help="List available Whisper models and exit")
 @click.option("--language", help="Force language detection (e.g., en, es, fr). Can also use HNS_LANG env var")
 @click.option("--last", is_flag=True, help="Transcribe the last recorded audio file")
-def main(sample_rate: int, channels: int, list_models: bool, language: Optional[str], last: bool):
+def main(sample_rate: int, channels: int, list_models: bool, language: str | None, last: bool):
     """Record audio from microphone, transcribe it, and copy to clipboard."""
 
     if list_models:
@@ -301,8 +287,7 @@ def main(sample_rate: int, channels: int, list_models: bool, language: Optional[
 
     try:
         if last:
-            recorder = AudioRecorder(sample_rate, channels)
-            audio_file_path = recorder._get_audio_file_path()
+            audio_file_path = get_audio_file_path()
             if not audio_file_path.exists():
                 console.print(
                     "❌ [bold red]No previous recording found. Record audio first by running 'hns' without --last flag.[/bold red]"
@@ -312,7 +297,7 @@ def main(sample_rate: int, channels: int, list_models: bool, language: Optional[
             recorder = AudioRecorder(sample_rate, channels)
             audio_file_path = recorder.record()
         transcriber = WhisperTranscriber(language=language)
-        transcription, _ = transcriber.transcribe(audio_file_path, show_progress=True)
+        transcription = transcriber.transcribe(audio_file_path, show_progress=True)
 
         try:
             copy_to_clipboard(transcription)
