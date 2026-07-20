@@ -219,12 +219,18 @@ def copy_to_clipboard(text: str):
 
 
 @click.command()
-@click.option("--sample-rate", default=16000, help="Sample rate for audio recording")
-@click.option("--channels", default=1, help="Number of audio channels")
-@click.option("--list-models", is_flag=True, help="List available Whisper models and exit")
+@click.version_option(package_name="hns", prog_name="hns")
+@click.option(
+    "--model",
+    "-m",
+    type=click.Choice(WhisperTranscriber.VALID_MODELS),
+    help="Whisper model to use. Defaults to HNS_WHISPER_MODEL env var or 'base'",
+)
 @click.option("--language", help="Force language detection (e.g., en, es, fr). Can also use HNS_LANG env var")
 @click.option("--last", is_flag=True, help="Transcribe the last recorded audio file")
-def main(sample_rate: int, channels: int, list_models: bool, language: str | None, last: bool):
+@click.option("--no-copy", is_flag=True, help="Do not copy the transcription to the clipboard")
+@click.option("--list-models", is_flag=True, help="List available Whisper models and exit")
+def main(model: str | None, language: str | None, last: bool, no_copy: bool, list_models: bool):
     """Record audio from microphone, transcribe it, and copy to clipboard."""
 
     if list_models:
@@ -240,15 +246,15 @@ def main(sample_rate: int, channels: int, list_models: bool, language: str | Non
                 )
                 sys.exit(1)
         else:
-            recorder = AudioRecorder(sample_rate, channels)
-            audio_file_path = recorder.record()
-        transcriber = WhisperTranscriber(language=language)
+            audio_file_path = AudioRecorder().record()
+        transcriber = WhisperTranscriber(model_name=model, language=language)
         transcription = transcriber.transcribe(audio_file_path)
 
-        try:
-            copy_to_clipboard(transcription)
-        except Exception as e:
-            console.print(f"⚠️ [bold yellow]Failed to copy to clipboard: {e}[/bold yellow]")
+        if not no_copy:
+            try:
+                copy_to_clipboard(transcription)
+            except Exception as e:
+                console.print(f"⚠️ [bold yellow]Failed to copy to clipboard: {e}[/bold yellow]")
 
         stdout_console.print(transcription)
 
