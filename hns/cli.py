@@ -73,8 +73,14 @@ class AudioRecorder:
             self.recording_frames += frames
 
     def record(self) -> Path:
+        if not sys.stdin.isatty():
+            raise RuntimeError(
+                "Recording needs an interactive terminal. Use --last to retranscribe the previous recording."
+            )
+
         self._validate_audio_device()
-        self._prepare_wave_file()
+        temp_path = self.audio_file_path.with_name(self.audio_file_path.name + ".tmp")
+        self._prepare_wave_file(temp_path)
 
         try:
             import sounddevice as sd
@@ -84,6 +90,7 @@ class AudioRecorder:
             )
         except Exception as e:
             self._close_wave_file()
+            temp_path.unlink(missing_ok=True)
             raise RuntimeError(f"Failed to initialize audio stream: {e}") from e
 
         timer = TimerLine("🎤 [bold blue]Recording ...... {elapsed} Press Enter to stop[/bold blue]")
@@ -91,15 +98,17 @@ class AudioRecorder:
             with stream, Live(timer, console=console, refresh_per_second=4, transient=True):
                 input()
         except KeyboardInterrupt:
-            console.print("⏹️ [bold yellow]Recording cancelled[/bold yellow]")
             self._close_wave_file()
-            sys.exit(0)
+            temp_path.unlink(missing_ok=True)
+            raise
         finally:
             self._close_wave_file()
 
         if self.recording_frames == 0:
+            temp_path.unlink(missing_ok=True)
             raise ValueError("No audio recorded")
 
+        temp_path.replace(self.audio_file_path)
         return self.audio_file_path
 
     def _validate_audio_device(self):
@@ -110,9 +119,9 @@ class AudioRecorder:
         except Exception as e:
             raise RuntimeError(f"No audio input device available: {e}") from e
 
-    def _prepare_wave_file(self):
+    def _prepare_wave_file(self, path: Path):
         self.recording_frames = 0
-        self.wave_file = wave.open(str(self.audio_file_path), "wb")
+        self.wave_file = wave.open(str(path), "wb")
         self.wave_file.setnchannels(self.channels)
         self.wave_file.setsampwidth(2)  # 16-bit audio
         self.wave_file.setframerate(self.sample_rate)
@@ -243,6 +252,9 @@ def main(sample_rate: int, channels: int, list_models: bool, language: str | Non
 
         stdout_console.print(transcription)
 
+    except KeyboardInterrupt:
+        console.print("⏹️ [bold yellow]Cancelled[/bold yellow]")
+        sys.exit(130)
     except (RuntimeError, ValueError) as e:
         console.print(f"❌ [bold red]{e}[/bold red]")
         sys.exit(1)
