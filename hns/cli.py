@@ -12,7 +12,6 @@ from rich.live import Live
 from rich.text import Text
 
 console = Console(stderr=True)
-stdout_console = Console()
 
 
 def format_duration(seconds: float) -> str:
@@ -209,7 +208,7 @@ class WhisperTranscriber:
     def list_models(cls):
         console.print("ℹ️ [bold cyan]Available Whisper models:[/bold cyan]")
         for model in cls.VALID_MODELS:
-            stdout_console.print(model)
+            click.echo(model)
         console.print("\nℹ️ [bold cyan]Environment variables:[/bold cyan]")
         console.print("  [dim]export HNS_WHISPER_MODEL=<model-name>[/dim]")
         console.print("  [dim]export HNS_LANG=<language-code>  # e.g., en, es, fr[/dim]")
@@ -262,7 +261,7 @@ def main(model: str | None, language: str | None, last: bool, no_copy: bool, lis
         if not no_copy:
             copy_to_clipboard(transcription)
 
-        stdout_console.print(transcription)
+        click.echo(transcription)
 
     except KeyboardInterrupt:
         console.print("⏹️ [bold yellow]Cancelled[/bold yellow]")
