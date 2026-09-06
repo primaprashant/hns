@@ -25,6 +25,8 @@ hns is a speech-to-text CLI tool to transcribe your voice from your microphone d
 
 `hns` transcribes your voice 100% locally using [faster-whisper](https://github.com/SYSTRAN/faster-whisper). The whisper model is downloaded automatically on first run and after that, `hns` can be used completely offline. After transcription, the text is displayed in the terminal (written to stdout) as well as automatically copied to your clipboard, ready to be pasted anywhere with `Ctrl+V` or `Cmd+V`.
 
+![quick demo](img/demo.gif)
+
 With `hns`, you can:
 - [Drive AI coding agents like Claude Code, Codex CLI, and Cursor CLI with your voice](https://hns-cli.dev/docs/drive-coding-agents/)
 - [Dictate and get polished text for emails, Slack messages, and documents](https://hns-cli.dev/docs/voice-to-polished-text/)
