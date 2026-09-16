@@ -19,11 +19,19 @@
 </a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/primaprashant/awesome-voice-typing">
+    <img src="https://img.shields.io/badge/Listed_in-Awesome_Voice_Typing-436D99?style=for-the-badge&amp;labelColor=24292F" alt="Listed in Awesome Voice Typing">
+  </a>
+</p>
+
 ---
 
 hns is a speech-to-text CLI tool to transcribe your voice from your microphone directly to clipboard. Integrate hns with Claude Code, Ollama, LLM, and more CLI tools for powerful workflows.
 
 `hns` transcribes your voice 100% locally using [faster-whisper](https://github.com/SYSTRAN/faster-whisper). The whisper model is downloaded automatically on first run and after that, `hns` can be used completely offline. After transcription, the text is displayed in the terminal (written to stdout) as well as automatically copied to your clipboard, ready to be pasted anywhere with `Ctrl+V` or `Cmd+V`.
+
+Looking for GUI alternatives? Browse [Awesome Voice Typing](https://github.com/primaprashant/awesome-voice-typing), a curated list of open-source speech-to-text and voice typing tools.
 
 ![quick demo](img/demo.gif)
 
