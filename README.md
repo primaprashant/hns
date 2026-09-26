@@ -33,7 +33,7 @@ hns is a speech-to-text CLI tool to transcribe your voice from your microphone d
 
 Looking for GUI alternatives? Browse [Awesome Voice Typing](https://github.com/primaprashant/awesome-voice-typing), a curated list of open-source speech-to-text and voice typing tools.
 
-![quick demo](img/demo.gif)
+![hns demo: transcribe speech locally, copy it to the clipboard, and pipe a spoken prompt into Codex](img/demo.gif)
 
 With `hns`, you can:
 - [Drive AI coding agents like Claude Code, Codex CLI, and Cursor CLI with your voice](https://hns-cli.dev/docs/drive-coding-agents/)
